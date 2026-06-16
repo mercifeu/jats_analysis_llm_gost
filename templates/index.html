@@ -1,0 +1,2399 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SciDoc Viewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background: #f5f5f5; font-family: 'Segoe UI', 'Calibri', sans-serif; color: #333; overflow-y: scroll; }
+        .word-header { background: #2b579a; height: 36px; display: flex; align-items: center; padding: 0 16px; color: #fff; font-size: 13px; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        
+        #toolbar { background: #fff; padding: 10px 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-bottom: 1px solid #e0e0e0; }
+        
+        .toolbar-btn {
+            background: #f3f3f3; color: #333; border: 1px solid #ccc; padding: 8px 16px;
+            border-radius: 3px; cursor: pointer; font-size: 13px; font-weight: 500;
+            display: flex; align-items: center; gap: 6px; transition: 0.15s;
+        }
+        .toolbar-btn:hover { background: #e8e8e8; border-color: #b0b0b0; }
+        .toolbar-btn:disabled { background: #f5f5f5; color: #999; cursor: not-allowed; border-color: #ddd; }
+        
+        .btn-upload { background: #2b579a; color: #fff; border-color: #2b579a; }
+        .btn-upload:hover { background: #1f4e79; border-color: #1f4e79; }
+        
+        .template-select {
+            padding: 7px 12px; border: 1px solid #ccc; border-radius: 3px;
+            font-size: 13px; min-width: 220px; background: #fff; color: #333;
+        }
+        
+        .btn-start { background: #1f4e79; color: #fff; border: none; }
+        .btn-start:hover { background: #173d5f; }
+        
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;
+        }
+        .modal.open { display: flex; }
+        .modal-content {
+            background: #fff; border-radius: 4px; padding: 20px; width: 90%; max-width: 650px;
+            max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #d0d0d0;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #eee; padding-bottom: 12px; }
+        .modal-title { font-size: 18px; font-weight: 600; color: #222; }
+        .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #888; padding: 0 4px; }
+        .modal-close:hover { color: #000; }
+        
+        .settings-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        .setting-group { background: #fafafa; padding: 12px; border-radius: 3px; border: 1px solid #e8e8e8; }
+        .setting-group h4 { margin: 0 0 10px 0; color: #444; font-size: 14px; font-weight: 600; }
+        .tag-input-row { display: flex; gap: 6px; margin-bottom: 8px; }
+        .tag-input-row input { flex: 1; padding: 7px 10px; border: 1px solid #ccc; border-radius: 2px; font-size: 13px; }
+        .tag-input-row button { padding: 6px 14px; background: #2b579a; color: #fff; border: none; border-radius: 2px; cursor: pointer; font-size: 13px; }
+        
+        .tags-container { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .tag { 
+            display: flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 2px; 
+            font-size: 12px; background: #e8e8e8; color: #333; border: 1px solid #d0d0d0;
+        }
+        .tag button { background: none; border: none; cursor: pointer; font-size: 15px; font-weight: bold; line-height: 1; color: #777; padding: 0 2px; }
+        .tag button:hover { color: #a00; }
+        
+        .memory-form { display: flex; flex-direction: column; gap: 12px; }
+        .memory-form input, .memory-form textarea {
+            padding: 8px 10px; border: 1px solid #ccc; border-radius: 2px; font-size: 13px;
+            font-family: 'Segoe UI', sans-serif; resize: vertical; background: #fff;
+        }
+        .memory-form textarea { min-height: 100px; }
+        .templates-list { margin-top: 16px; border-top: 1px solid #eee; padding-top: 12px; }
+        .templates-list h4 { margin: 0 0 10px 0; font-size: 14px; color: #444; }
+        .template-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 12px; background: #f8f8f8; border-radius: 2px; margin-bottom: 6px; border: 1px solid #eee;
+        }
+        .template-item button { background: #d32f2f; color: #fff; border: none; padding: 4px 10px; border-radius: 2px; cursor: pointer; font-size: 11px; }
+        
+        .processing-status {
+            display: none; align-items: center; gap: 10px; padding: 6px 12px;
+            background: #f0f4f8; border-radius: 3px; border-left: 3px solid #2b579a;
+        }
+        .processing-status.active { display: flex; }
+        .spinner {
+            width: 16px; height: 16px; border: 2px solid #d0d0d0; border-top: 2px solid #2b579a;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .progress-text { font-size: 12px; color: #555; }
+        
+        .word-canvas { display: flex; flex-direction: column; align-items: center; padding-bottom: 30px; }
+        .word-page {
+            background: #fff; width: 816px; min-height: 1056px; padding: 90px 70px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12); margin-bottom: 16px; box-sizing: border-box;
+            position: relative; font-size: 11pt; line-height: 1.2; color: #222;
+            word-wrap: break-word; word-break: break-word; overflow-wrap: break-word; white-space: pre-wrap; overflow-x: hidden;
+        }
+        .word-page h1 { font-size: 24px; color: #222; margin-top: 0; border-bottom: 1px solid #ccc; padding-bottom: 6px; font-weight: 600; }
+        .word-page h2 { font-size: 18px; color: #333; margin-top: 16px; font-weight: 600; }
+        .word-page p { margin-bottom: 6pt; text-align: justify; }
+        .word-page img { max-width: 100%; height: auto; margin: 8px 0; }
+        .word-page table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; }
+        .word-page th, .word-page td { border: 1px solid #999; padding: 5px; text-align: left; }
+        .word-page th { background: #f4f4f4; }
+        
+        #articles-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 30px; width: 100%; max-width: 2000px; }
+        .grid-item { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; position: relative; background: #fff; border-radius: 2px; }
+        .grid-item:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
+        .grid-page { height: 400px; overflow: hidden; position: relative; }
+        .grid-page::after {
+            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 80px;
+            background: linear-gradient(transparent, white); pointer-events: none;
+        }
+        .grid-title {
+            text-align: center; margin-top: 12px; font-weight: 500; color: #333;
+            max-width: 816px; font-size: 14px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;
+        }
+        .grid-title span.percent { font-weight: 600; color: #555; }
+        .grid-title span.percent.good { color: #388e3c; }
+        .grid-title span.percent.warn { color: #d32f2f; }
+        
+        #viewer-section { display: none; width: 100%; flex-direction: column; align-items: center; }
+        .back-btn {
+            background: #f0f0f0; border: 1px solid #ccc; padding: 7px 14px; cursor: pointer;
+            margin-bottom: 16px; border-radius: 2px; font-size: 13px; color: #333;
+        }
+        .back-btn:hover { background: #e5e5e5; }
+        .comparison-wrapper { display: flex; gap: 20px; justify-content: center; width: 100%; overflow-x: auto; padding-bottom: 16px; }
+        .comparison-col { display: flex; flex-direction: column; align-items: center; min-width: 816px; }
+        .col-header {
+            font-size: 13px; font-weight: 600; margin-bottom: 10px; padding: 6px 16px;
+            border-radius: 2px; text-align: center; background: #f5f5f5; border: 1px solid #ddd; color: #444;
+        }
+
+        #warnings-panel { display: flex; flex-direction: column; gap: 8px; align-items: center; width: 100%; max-width: 1800px; margin: 0 auto 16px auto; }
+        .warning-card {
+            background: #fff8e1; border: 1px solid #ffe082; border-left: 4px solid #ffb300;
+            padding: 10px 16px; border-radius: 3px; display: flex; align-items: center;
+            justify-content: space-between; width: 100%; max-width: 816px;
+        }
+        .warning-text { color: #795548; font-size: 13px; }
+        .warning-btn {
+            background: #fff; color: #333; border: 1px solid #ccc; padding: 5px 12px;
+            border-radius: 2px; cursor: pointer; font-size: 12px; margin-left: 16px;
+        }
+        
+        .loader {
+            border: 3px solid #e0e0e0; border-top: 3px solid #2b579a; border-radius: 50%;
+            width: 32px; height: 32px; animation: spin 0.8s linear infinite; margin: 16px auto;
+        }
+        
+        .check-circle {
+            width: 20px; height: 20px; border-radius: 50%; background: #e0e0e0;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .check-circle.success { background: #4caf50; }
+        .check-circle.success::after {
+            content: ''; display: block; width: 4px; height: 8px;
+            border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); margin-top: -2px;
+        }
+        .check-circle.loading { background: transparent; border: 2px solid #e0e0e0; border-top: 2px solid #2b579a; animation: spin 0.6s linear infinite; }
+        
+        .xml-block {
+            white-space: pre-wrap !important; word-wrap: break-word !important; word-break: break-all !important;
+            overflow-wrap: break-word !important; max-width: 100%; font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 9.5pt; line-height: 1.35; background: #fafafa; padding: 10px;
+            border-radius: 2px; border: 1px solid #e8e8e8; color: #222;
+        }
+        .word-page pre, .word-page code { white-space: pre-wrap !important; word-break: break-all !important; max-width: 100%; }
+
+        .xml-block-wrapper {
+            position: relative;
+        }
+
+        .col-header-with-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .col-header-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .col-header-actions .action-btn {
+            width: 28px;
+            height: 28px;
+            border: 1px solid #ddd;
+            background: #fff;
+            border-radius: 3px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            transition: all 0.15s;
+            padding: 0;
+        }
+
+        .col-header-actions .action-btn:hover {
+            background: #e3f2fd;
+            border-color: #2196f3;
+            transform: scale(1.05);
+        }
+
+        .col-header-actions .action-btn.save {
+            background: #4caf50;
+            color: white;
+            border-color: #4caf50;
+            width: auto;
+            padding: 0 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .col-header-actions .action-btn.save:hover {
+            background: #388e3c;
+        }
+
+        .col-header-actions .action-btn.cancel {
+            background: #f5f5f5;
+            color: #666;
+            width: auto;
+            padding: 0 12px;
+            font-size: 12px;
+        }
+
+        .col-header-actions .action-btn.cancel:hover {
+            background: #ffebee;
+            color: #c62828;
+            border-color: #ffcdd2;
+        }
+
+        .xml-edit-actions .action-btn {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ddd;
+            background: #fff;
+            border-radius: 3px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+
+        .xml-edit-actions .action-btn:hover {
+            background: #e3f2fd;
+            border-color: #2196f3;
+            transform: scale(1.05);
+        }
+
+        .xml-edit-area {
+            width: 100%;
+            min-height: 500px;
+            padding: 12px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            border: 2px solid #2196f3;
+            border-radius: 3px;
+            background: #fffef5;
+            resize: vertical;
+            box-sizing: border-box;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow-x: auto;
+        }
+
+        .xml-edit-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            justify-content: flex-end;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .chat-container { margin-top: 15px; border-top: 2px solid #2b579a; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .chat-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #2b579a; font-size: 13px; }
+        .chat-messages { background: #fafafa; border: 1px solid #ddd; border-radius: 3px; padding: 8px; height: 150px; overflow-y: auto; font-size: 12px; }
+        .chat-msg { margin-bottom: 6px; padding: 6px 8px; border-radius: 3px; line-height: 1.4; }
+        .chat-msg.user { background: #e3f2fd; }
+        .chat-msg.ai { background: #e8f5e9; }
+        .chat-msg.system { background: #fff3e0; color: #e65100; font-style: italic; font-size: 11px; }
+        .chat-msg.error { background: #ffebee; color: #c62828; }
+        .chat-input-row { display: flex; gap: 6px; }
+        .chat-input-row input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 2px; font-size: 12px; }
+        .version-item { padding: 12px; border-bottom: 1px solid #eee; }
+        .version-item.active { background: #e8f5e9; border-left: 4px solid #4caf50; }
+        .version-pre { white-space: pre-wrap; font-size: 11px; background: #f5f5f5; padding: 8px; max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 2px; margin-top: 8px;}
+        .setting-desc { font-size: 12px; color: #666; margin: 4px 0 10px 0; line-height: 1.4; }
+        .setting-group { background: #fafafa; padding: 12px 16px; border-radius: 4px; border: 1px solid #e8e8e8; }
+        .setting-group h4 { margin: 0 0 6px 0; color: #2b579a; font-size: 15px; font-weight: 600; }
+        .test-result { margin-top: 8px; padding: 8px; border-radius: 3px; font-size: 13px; }
+        .test-result.success { background: #e8f5e9; color: #2e7d32; border-left: 3px solid #4caf50; }
+        .test-result.error { background: #ffebee; color: #c62828; border-left: 3px solid #f44336; }
+
+        .rag-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        .rag-badge.inactive {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        .article-actions {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 4px;
+            z-index: 10;
+            background: rgba(255,255,255,0.95);
+            padding: 4px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .action-btn {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ddd;
+            background: #fff;
+            border-radius: 3px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+
+        .action-btn:hover {
+            background: #f5f5f5;
+            border-color: #999;
+            transform: scale(1.05);
+        }
+
+        .action-btn.edit:hover { background: #e3f2fd; border-color: #2196f3; }
+        .action-btn.hide:hover { background: #fff3e0; border-color: #ff9800; }
+        .action-btn.delete:hover { background: #ffebee; border-color: #f44336; }
+
+        .grid-item.hidden-article {
+            opacity: 0.4;
+            filter: grayscale(80%);
+            position: relative;
+        }
+
+        .grid-item.hidden-article::after {
+            content: "🚫 Скрыта";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 5;
+        }
+
+        .grid-item.deleted-article {
+            display: none !important;
+        }
+
+        .chat-input-row input:disabled,
+        .chat-input-row button:disabled {
+            background: #f5f5f5 !important;
+            color: #999 !important;
+            cursor: not-allowed !important;
+            border-color: #ddd !important;
+            opacity: 0.6;
+        }
+
+        .parsing-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            border-radius: 4px;
+            backdrop-filter: blur(2px);
+        }
+
+        .parsing-overlay-content {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .parsing-overlay .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid #e0e0e0;
+            border-top: 3px solid #2b579a;
+            margin: 0 auto 12px auto;
+        }
+
+        .comparison-col {
+            min-width: 816px;
+            max-width: 816px;
+            flex: 0 0 816px;
+            box-sizing: border-box;
+        }
+
+        .comparison-wrapper {
+            gap: 20px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: nowrap;
+        }
+
+        .col-header {
+            box-sizing: border-box;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            margin-bottom: 8px;
+        }
+
+        .col-header-with-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .comparison-col.middle-col {
+            transition: all 0.3s ease;
+        }
+
+        .comparison-col.middle-col.col-hidden {
+            min-width: auto !important;
+            max-width: none !important;
+            flex: 0 0 auto !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .comparison-col.middle-col.col-hidden .word-page {
+            display: none;
+        }
+
+        .comparison-col.middle-col.col-hidden .col-header > span {
+            display: none;
+        }
+
+        .comparison-col.middle-col.col-hidden .col-header {
+            position: static;
+            width: auto;
+            min-height: auto;
+            padding: 6px;
+            background: transparent;
+            border: none !important;
+            box-shadow: none;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .comparison-col.middle-col.col-hidden .col-header-actions {
+            margin: 0;
+        }
+
+        .comparison-col.middle-col.col-hidden .action-btn.eye {
+            display: flex;
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+<div class="word-header">
+    <span>Обработка научных документов</span>
+</div>
+
+<div id="toolbar">
+    <button class="toolbar-btn btn-upload" onclick="document.getElementById('fileInput').click()">Загрузить документ</button>
+    <input type="file" id="fileInput" accept=".docx" style="display:none" onchange="handleUpload(event)">
+    <div id="status-check" class="check-circle"></div>
+    
+    <button class="toolbar-btn" onclick="openModal('preprocess-modal')">Настройки</button>
+    <button class="toolbar-btn" onclick="openModal('memory-modal')">Шаблоны</button>
+    
+    <select id="template-select" class="template-select" disabled>
+        <option value="">Выберите шаблон</option>
+    </select>
+    
+    <button id="btn-start-parse" class="toolbar-btn btn-start" onclick="startParsing()" disabled>Запустить анализ</button>
+    <button class="toolbar-btn" onclick="downloadAllXml()" title="Скачать XML всех обработанных статей">Скачать XML</button>
+    
+    <div id="processing-status" class="processing-status">
+        <div class="spinner"></div>
+        <span class="progress-text" id="progress-text">Обработка: 0/0</span>
+    </div>
+</div>
+
+<div id="preprocess-modal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <span class="modal-title">Настройки предобработки журнала</span>
+            <button class="modal-close" onclick="closeModal('preprocess-modal')">&times;</button>
+        </div>
+        <div class="settings-grid">
+            <div class="setting-group">
+                <h4>Обрезка текста в конце</h4>
+                <p class="setting-desc">Удаляет всё, что идёт после указанного слова/предложения. Полезно для отсечения справочной информации (например, "ПРАВИЛА ДЛЯ АВТОРОВ").</p>
+                <div class="tag-input-row">
+                    <input type="text" id="sw-input" placeholder="ПРАВИЛА ДЛЯ АВТОРОВ" onkeypress="if(event.key==='Enter') addStopWord()">
+                    <button onclick="addStopWord()">+</button>
+                </div>
+                <div class="tags-container" id="sw-tags"></div>
+            </div>
+
+            <div class="setting-group">
+                <h4>Сокращение основной части</h4>
+                <p class="setting-desc">
+                    Вырезает большой блок основного текста между двумя ключевыми словами/предложениями. Это позволяет ИИ сосредоточиться только на <b>метаданных</b> и <b>списке литературы</b>, не обрабатывая многостраничный основной текст.
+                </p>
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 12px; color: #555;">🔻 Удалить текст, начиная со слова:</label>
+                    <div class="tag-input-row">
+                        <input type="text" id="start-input" placeholder="Введение" onkeypress="if(event.key==='Enter') addStartWord()">
+                        <button onclick="addStartWord()">+</button>
+                    </div>
+                    <div class="tags-container" id="start-tags"></div>
+                </div>
+                <div>
+                    <label style="font-size: 12px; color: #555;">🔺 Удалить текст, заканчивая словом:</label>
+                    <div class="tag-input-row">
+                        <input type="text" id="end-input" placeholder="Литература" onkeypress="if(event.key==='Enter') addEndWord()">
+                        <button onclick="addEndWord()">+</button>
+                    </div>
+                    <div class="tags-container" id="end-tags"></div>
+                </div>
+                <div style="margin-top: 15px; padding: 10px; background: #fafafa; border-radius: 3px; border-left: 3px solid #ccc;">
+                    <label style="font-size: 12px; color: #555; display: block; margin-bottom: 6px;">
+                        <b>Имя тега для основного текста</b> (в XML-результате):
+                    </label>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <span style="color: #888; font-family: monospace;">&lt;</span>
+                        <input type="text" id="text-tag-input" value="text" 
+                               style="flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 13px;">
+                        <span style="color: #888; font-family: monospace;"> lang="RUS"&gt;...&lt;/</span>
+                        <input type="text" id="text-tag-input-mirror" value="text" disabled
+                               style="width: 60px; padding: 6px 10px; border: 1px solid #ddd; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 13px; background: #f5f5f5;">
+                        <span style="color: #888; font-family: monospace;">&gt;</span>
+                    </div>
+                    <p style="font-size: 11px; color: #555; margin: 6px 0 0 0;">
+                        💡 Этот тег содержит полный текст статьи и исключается из RAG-базы для экономии места.
+                    </p>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <h4>Разделитель между статьями</h4>
+                <p class="setting-desc">
+                    Укажите уникальный маркер, по которому система разобьёт журнал на отдельные статьи.
+                </p>
+                
+                <div style="padding: 12px; background: #fafafa; border-radius: 4px; border-left: 4px solid #ccc; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 8px 0; color: #444;; font-size: 14px;">Синтез паттерна из примеров</h4>
+                    <p style="margin: 0 0 10px 0; font-size: 12px; line-height: 1.5; color: #555;">
+                        Выделите 2-3 одинаковых блока из <b>разных статей</b> (например, "Формат цитирования" или DOI). 
+                        Система автоматически создаст универсальный regex-паттерн.
+                    </p>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="toolbar-btn" onclick="startExampleCollection()" id="start-collect-btn">
+                            Начать сбор примеров
+                        </button>
+                        <button class="toolbar-btn btn-start" onclick="synthesizeFromExamples()" id="synthesize-main-btn" style="display: none;">
+                            Синтезировать паттерн
+                        </button>
+                    </div>
+                    <div id="examples-list" style="margin-top: 10px;"></div>
+                    <div id="synthesis-result" style="margin-top: 10px;"></div>
+                </div>
+                
+                <div style="padding: 12px; background: #fafafa; border-radius: 4px; border-left: 4px solid #ccc; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #444; font-size: 14px;">Параметры разделения</h4>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="font-size: 13px; color: #333; display: block; margin-bottom: 6px; font-weight: 500;">
+                            Где находится маркер в статье?
+                        </label>
+                        <div style="display: flex; flex-direction: column; gap: 6px; padding-left: 5px;">
+                            <label style="font-size: 12px; color: #555; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                <input type="radio" name="position" value="bottom" checked onchange="updatePositionHint()">
+                                <span><b>В конце статьи</b> (например, "Формат цитирования")</span>
+                            </label>
+                            <label style="font-size: 12px; color: #555; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                <input type="radio" name="position" value="top" onchange="updatePositionHint()">
+                                <span><b>В начале статьи</b> (например, УДК, DOI)</span>
+                            </label>
+                        </div>
+                        <div id="position-hint" style="margin-top: 6px; padding: 6px 10px; background: #f5f5f5; border-radius: 3px; font-size: 11px; color: #555; border-left: 2px solid #ccc;">
+                            💡 Разрез будет сделан <b>после</b> каждого найденного маркера
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label style="font-size: 13px; color: #333; display: block; margin-bottom: 6px; font-weight: 500;">
+                            Сколько раз маркер встречается в ОДНОЙ статье?
+                        </label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" id="periodicity-input" value="1" min="1" max="5" 
+                                   style="width: 60px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px;">
+                            <span style="font-size: 12px; color: #666;">раз(а)</span>
+                        </div>
+                        <div id="periodicity-hint" style="margin-top: 6px; padding: 6px 10px; background: #f5f5f5; border-radius: 3px; font-size: 11px; color: #555; border-left: 2px solid #ccc;">
+                            💡 Пример: DOI встречается <b>2 раза</b> (вверху в метаданных + внизу в цитировании) → укажите 2, система будет резать после каждого 2-го вхождения
+                        </div>
+                    </div>
+                </div>
+                
+                <details style="margin-top: 10px;">
+                    <summary style="cursor: pointer; color: #2b579a; font-size: 13px;">Показать расширенные настройки (для экспертов)</summary>
+                    <div style="margin-top: 10px;">
+                        <label style="font-size: 12px; color: #555; display: block; margin-bottom: 5px;">
+                            Regex-паттерн:
+                        </label>
+                        <input type="text" id="split-pattern-input" placeholder="Введите вручную" 
+                               style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 12px; box-sizing: border-box;">
+                        <button class="toolbar-btn" style="margin-top: 10px; font-size: 12px;" onclick="testSplitPattern()">Протестировать на текущем файле</button>
+                        <div id="split-test-result"></div>
+                    </div>
+                </details>
+            </div>
+
+            <div class="setting-group">
+                <h4>Базовый системный промпт (V1)</h4>
+                <p class="setting-desc">
+                    Определяет базовые правила работы ИИ для всех шаблонов. Редактируйте при смене типа публикаций или специфических требований журнала.
+                </p>
+                <button class="toolbar-btn" onclick="openBasePromptEditor()">Редактировать базовый промпт</button>
+            </div>
+
+            <div class="setting-group">
+                <h4>База знаний</h4>
+                <p class="setting-desc">
+                    Здесь можно просмотреть накопленные примеры и удалить устаревшие.
+                </p>
+                <button class="toolbar-btn" onclick="closeModal('preprocess-modal'); openRAGModal();">
+                    Открыть базу знаний
+                </button>
+            </div>
+        </div>
+        <div style="margin-top: 20px; text-align: right;">
+            <button class="toolbar-btn btn-start" onclick="applySettingsAndClose()">Применить и закрыть</button>
+        </div>
+    </div>
+</div>
+
+<div id="base-prompt-modal" class="modal">
+    <div class="modal-content" style="max-width: 850px;">
+        <div class="modal-header">
+            <span class="modal-title">Редактор базового системного промпта</span>
+            <button class="modal-close" onclick="closeModal('base-prompt-modal')">&times;</button>
+        </div>
+        <p style="color: #555; font-size: 13px; margin-bottom: 10px; line-height: 1.5;">
+            Это глобальная инструкция для ИИ (версия V1). Все <b>новые</b> шаблоны будут использовать её как стартовую базу. Изменение не затрагивает уже сохранённые версии (V2, V3...) в существующих шаблонах - они защищены механизмом контроля версий.
+        </p>
+        <textarea id="base-prompt-text" style="width: 100%; min-height: 450px; padding: 12px; border: 1px solid #ccc; border-radius: 3px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.55; box-sizing: border-box;"></textarea>
+        <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+            <button class="toolbar-btn" onclick="resetBasePrompt()">Сбросить к стандартному</button>
+            <div style="display: flex; gap: 8px;">
+                <button class="toolbar-btn" onclick="closeModal('base-prompt-modal')">Отмена</button>
+                <button class="toolbar-btn btn-start" onclick="saveBasePrompt()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="version-modal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+            <span class="modal-title">История версий промпта</span>
+            <button class="modal-close" onclick="closeModal('version-modal')">&times;</button>
+        </div>
+        <div id="version-list" style="max-height: 65vh; overflow-y: auto;"></div>
+    </div>
+</div>
+
+<div id="memory-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title">Управление шаблонами</span>
+            <button class="modal-close" onclick="closeModal('memory-modal')">&times;</button>
+        </div>
+        <div class="memory-form">
+            <input type="text" id="tpl-name" placeholder="Название шаблона">
+            <label style="font-weight:500;color:#444;margin-top:8px;display:block;">Текст статьи до обработки:</label>
+            <textarea id="tpl-before" placeholder="Вставьте исходный текст..."></textarea>
+            <label style="font-weight:500;color:#444;margin-top:8px;display:block;">Ожидаемый XML-результат:</label>
+            <textarea id="tpl-after" placeholder="Вставьте корректный XML..."></textarea>
+            <button class="toolbar-btn" onclick="saveTemplate()">Сохранить шаблон</button>
+        </div>
+        <div class="templates-list">
+            <h4>Сохранённые шаблоны:</h4>
+            <div id="templates-container"><em style="color:#888">Нет сохранённых шаблонов</em></div>
+        </div>
+    </div>
+</div>
+
+<div id="rag-modal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-header">
+            <span class="modal-title">База знаний</span>
+            <button class="modal-close" onclick="closeModal('rag-modal')">&times;</button>
+        </div>
+        <div style="background: #e3f2fd; padding: 12px; border-radius: 4px; margin-bottom: 16px;">
+            <p style="margin: 0; font-size: 13px; line-height: 1.5;">
+                <b>RAG (Retrieval-Augmented Generation)</b> — механизм автоматического подбора наиболее похожего примера 
+                из базы знаний для обработки каждой статьи. Система анализирует структуру статьи и находит 
+                в базе пример с максимальной семантической и структурной близостью.
+            </p>
+            <p style="margin: 8px 0 0 0; font-size: 12px; color: #555;">
+                <b>Статистика:</b> <span id="rag-stats-text">Загрузка...</span>
+            </p>
+        </div>
+        <div id="rag-examples-list" style="max-height: 500px; overflow-y: auto;"></div>
+    </div>
+</div>
+
+<div class="word-canvas">
+    <div id="warnings-panel"></div>
+    <div id="articles-grid" style="display:none"></div>
+    <div id="viewer-section">
+        <button class="back-btn" onclick="showGrid()">Назад к списку</button>
+        <div id="viewer"></div>
+    </div>
+</div>
+
+<script>
+let stopWords = [], startWords = [], endWords = [];
+let articlesList = [], currentFile = null;
+let parsingPoller = null;
+
+window.onload = () => {
+    addStopWord('ПРАВИЛА ДЛЯ АВТОРОВ');
+    addStartWord('Введение.');
+    addEndWord('Литература');
+    loadTemplates();
+    loadTextTagSetting();
+};
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+window.onclick = (e) => { if(e.target.classList.contains('modal')) e.target.classList.remove('open'); };
+
+function addStopWord(text) {
+    const val = (text || document.getElementById('sw-input').value).trim().toUpperCase();
+    if(!val) return;
+    if(!stopWords.includes(val)) { stopWords.push(val); renderStopWords(); if(currentFile) handleUpload(null, true); }
+    document.getElementById('sw-input').value = '';
+}
+function removeStopWord(i) { stopWords.splice(i,1); renderStopWords(); if(currentFile) handleUpload(null,true); }
+function renderStopWords() {
+    const c = document.getElementById('sw-tags');
+    c.innerHTML = stopWords.map((w,i) => `<div class="tag">${w} <button onclick="removeStopWord(${i})">&times;</button></div>`).join('');
+}
+
+function addStartWord(text) {
+    const val = (text || document.getElementById('start-input').value).trim();
+    if(!val) return;
+    if(!startWords.includes(val)) { startWords.push(val); renderStartWords(); if(articlesList.length) renderGrid(); }
+    document.getElementById('start-input').value = '';
+}
+function removeStartWord(i) { startWords.splice(i,1); renderStartWords(); if(articlesList.length) renderGrid(); }
+function renderStartWords() {
+    const c = document.getElementById('start-tags');
+    c.innerHTML = startWords.map((w,i) => `<div class="tag">${w} <button onclick="removeStartWord(${i})">&times;</button></div>`).join('');
+}
+
+function addEndWord(text) {
+    const val = (text || document.getElementById('end-input').value).trim();
+    if(!val) return;
+    if(!endWords.includes(val)) { endWords.push(val); renderEndWords(); if(articlesList.length) renderGrid(); }
+    document.getElementById('end-input').value = '';
+}
+function removeEndWord(i) { endWords.splice(i,1); renderEndWords(); if(articlesList.length) renderGrid(); }
+function renderEndWords() {
+    const c = document.getElementById('end-tags');
+    c.innerHTML = endWords.map((w,i) => `<div class="tag">${w} <button onclick="removeEndWord(${i})">&times;</button></div>`).join('');
+}
+
+async function handleUpload(event) {
+    if (event?.target?.files?.[0]) currentFile = event.target.files[0];
+    if (!currentFile) return;
+    
+    const check = document.getElementById('status-check');
+    check.className = 'check-circle loading';
+    
+    const fd = new FormData();
+    fd.append('file', currentFile);
+    fd.append('preview_only', '1');
+    stopWords.forEach(w => fd.append('stop_words[]', w));
+    
+    try {
+        const res = await fetch('/upload', {method: 'POST', body: fd});
+        const data = await res.json();
+        
+        if (data.error) throw new Error(data.error);
+        
+        showFullDocument(data);
+        
+        articlesList = [];
+        
+        check.className = 'check-circle success';
+        document.getElementById('template-select').disabled = false;
+        document.getElementById('btn-start-parse').disabled = false;
+        loadTemplates();
+        
+    } catch (err) {
+        alert('Ошибка: ' + err.message);
+        check.className = 'check-circle';
+    }
+}
+
+function showFullDocument(data) {
+    const grid = document.getElementById('articles-grid');
+    const warnings = document.getElementById('warnings-panel');
+    const viewer = document.getElementById('viewer-section');
+    const content = document.getElementById('viewer');
+    const backBtn = viewer.querySelector('.back-btn');
+    
+    grid.style.display = 'none';
+    warnings.style.display = 'none';
+    viewer.style.display = 'flex';
+
+    if (backBtn) backBtn.style.display = 'none';
+    
+    const docText = data.full_text || data.text || '';
+    
+    if (!docText) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #c00;">
+                <h3>Документ пуст</h3>
+                <p>Не удалось извлечь текст из файла. Проверьте, что файл содержит текст.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    content.innerHTML = `
+        <div style="width: 100%; max-width: 900px; margin: 0 auto;">
+            <div style="background: #e3f2fd; padding: 16px; border-radius: 6px; border-left: 4px solid #2196f3; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 8px 0; color: #1565c0;">Предпросмотр документа</h3>
+                <p style="margin: 0; font-size: 14px; color: #333; line-height: 1.5;">
+                    Загружен документ: <b>${(data.char_count || docText.length).toLocaleString()}</b> символов, 
+                    <b>${(data.word_count || docText.split(/\s+/).length).toLocaleString()}</b> слов.<br>
+                    Ниже показано полное содержимое. Настройте параметры предобработки через <b>"Настройки"</b> и нажмите 
+                    <b>"Применить и закрыть"</b> для разбивки на статьи.
+                </p>
+            </div>
+            <div class="word-page" style="max-height: 80vh; overflow-y: auto;">
+                ${marked.parse(docText)}
+            </div>
+        </div>
+    `;
+    
+    window.scrollTo(0, 0);
+}
+
+function renderGrid() {
+    const grid = document.getElementById('articles-grid');
+    const warnings = document.getElementById('warnings-panel');
+    grid.style.display = 'flex';
+    grid.innerHTML = '';
+    warnings.innerHTML = '';
+    warnings.style.display = 'none';
+    
+    articlesList.forEach(art => {
+        const item = document.createElement('div');
+        item.className = 'grid-item';
+        item.id = `grid-item-${art.id}`;
+        
+        const pageWrapper = document.createElement('div');
+        pageWrapper.style.position = 'relative';
+        
+        const actions = document.createElement('div');
+        actions.className = 'article-actions';
+        actions.innerHTML = `
+            <button class="action-btn edit" onclick="event.stopPropagation(); editArticle('${art.id}')" title="Редактировать текст">✏️</button>
+            <button class="action-btn hide" onclick="event.stopPropagation(); toggleHideArticle('${art.id}')" title="Скрыть/показать" id="hide-btn-${art.id}">👁️</button>
+            <button class="action-btn delete" onclick="event.stopPropagation(); deleteArticleConfirm('${art.id}')" title="Удалить">🗑️</button>
+        `;
+        
+        const page = document.createElement('div');
+        page.className = 'word-page grid-page';
+        page.id = `preview-${art.id}`;
+        page.onclick = () => openArticle(art.id);
+        
+        const title = document.createElement('div');
+        title.className = 'grid-title';
+        title.innerText = art.title;
+        
+        pageWrapper.appendChild(actions);
+        pageWrapper.appendChild(page);
+        item.appendChild(pageWrapper);
+        item.appendChild(title);
+        grid.appendChild(item);
+        
+        fetch(`/article/${art.id}`).then(r=>r.json()).then(data => {
+            const displayContent = data.edited_content || data.content;
+            document.getElementById(`preview-${art.id}`).innerHTML = marked.parse(displayContent);
+            
+            updateArticleState(art.id, data);
+
+            const orig = data.content.trim().split(/\s+/).filter(Boolean).length;
+            const filt = removeDynamicBlock(displayContent).trim().split(/\s+/).filter(Boolean).length;
+            const pct = orig ? Math.round(filt / orig * 100) : 100;
+            const cls = pct > 60 ? 'warn' : 'good';
+            
+            let titleHtml = `${art.title} / <span class="percent ${cls}">Осталось: ${pct}%</span>`;
+            if (data.edited_content) {
+                titleHtml += ` <span style="color: #2196f3; font-size: 11px;">✏️ ред.</span>`;
+            }
+            title.innerHTML = titleHtml;
+            
+            if (pct > 60 && !data.hidden) {
+                warnings.style.display = 'flex';
+                warnings.innerHTML += `<div class="warning-card">
+                    <span class="warning-text">Предупреждение: в "${art.title}" сохранилось ${pct}% текста</span>
+                    <button class="warning-btn" onclick="goToArticle('grid-item-${art.id}')">Перейти</button>
+                </div>`;
+            }
+        });
+    });
+}
+
+function updateArticleState(aid, data) {
+    const item = document.getElementById(`grid-item-${aid}`);
+    if (!item) return;
+    
+    const hideBtn = document.getElementById(`hide-btn-${aid}`);
+    
+    if (data.hidden) {
+        item.classList.add('hidden-article');
+        if (hideBtn) hideBtn.innerHTML = '✓';
+    } else {
+        item.classList.remove('hidden-article');
+        if (hideBtn) hideBtn.innerHTML = '👁️';
+    }
+    
+    if (data.deleted) {
+        item.classList.add('deleted-article');
+    } else {
+        item.classList.remove('deleted-article');
+    }
+}
+
+function goToArticle(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.transition = 'box-shadow 0.3s ease';
+        el.style.boxShadow = '0 0 0 3px #ffb300, 0 4px 12px rgba(0,0,0,0.15)';
+        setTimeout(() => { el.style.boxShadow = ''; }, 1500);
+    }
+}
+
+function removeDynamicBlock(content) {
+    if(!startWords.length || !endWords.length) return content;
+    const lower = content.toLowerCase();
+    let startIdx = -1, startLen = 0;
+    for(const sw of startWords) {
+        const idx = lower.indexOf(sw.toLowerCase());
+        if(idx !== -1 && (startIdx === -1 || idx < startIdx)) { startIdx = idx; startLen = sw.length; }
+    }
+    if(startIdx === -1) return content;
+    const after = content.substring(startIdx + startLen);
+    let endIdx = -1;
+    for(const ew of endWords) {
+        const esc = ew.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = `${esc.replace(/\s+/g, '\\s+')}(?![а-яА-ЯёЁ,;:])`;
+        const m = after.match(new RegExp(pattern, 'i'));
+        if(m && (endIdx === -1 || m.index < endIdx)) endIdx = m.index;
+    }
+    if(endIdx === -1) return content;
+    return (content.substring(0, startIdx).trimEnd() + '\n\n' + after.substring(endIdx).trimStart()).trim();
+}
+
+async function openArticle(id) {
+    document.getElementById('articles-grid').style.display = 'none';
+    document.getElementById('warnings-panel').style.display = 'none';
+    const viewer = document.getElementById('viewer-section');
+    const content = document.getElementById('viewer');
+    
+    const backBtn = viewer.querySelector('.back-btn');
+    if (backBtn) backBtn.style.display = 'inline-block';
+
+    viewer.style.display = 'flex';
+    content.innerHTML = `
+        <div class="comparison-wrapper">
+            <div class="comparison-col">
+                <div class="col-header">ОРИГИНАЛ</div>
+                <div class="word-page" id="original-${id}"><div class="loader"></div>Загрузка...</div>
+            </div>
+            <div class="comparison-col middle-col" id="middle-col-${id}">
+                <div class="col-header col-header-with-actions">
+                    <span>БЕЗ ОСНОВНОЙ ЧАСТИ</span>
+                    <div class="col-header-actions">
+                        <button class="action-btn eye" id="eye-btn-${id}" onclick="toggleMiddleColumn('${id}')" title="Скрыть/показать колонку">👁️</button>
+                    </div>
+                </div>
+                <div class="word-page"><div class="loader"></div>Загрузка...</div>
+            </div>
+            <div class="comparison-col">
+                <div class="col-header col-header-with-actions" id="xml-header-${id}">
+                    <span>XML-РЕЗУЛЬТАТ</span>
+                    <div class="col-header-actions" id="xml-actions-${id}" style="display:none;">
+                        <button class="action-btn" onclick="editXmlInline('${id}')" title="Редактировать XML вручную">✏️</button>
+                    </div>
+                </div>
+                <div class="word-page" id="xml-page-${id}"><div class="loader"></div>Проверка...</div>
+            </div>
+        </div>`;
+    try {
+        const res = await fetch(`/article/${id}`);
+        let data = await res.json();
+        if (!data.parsed) {
+            try {
+                const parseRes = await fetch(`/parse/result/${id}`);
+                if (parseRes.status === 200) {
+                    const parseData = await parseRes.json();
+                    if (parseData.xml) data.parsed = parseData.xml;
+                }
+            } catch (e) {}
+        }
+
+        const cols = content.querySelectorAll('.comparison-col');
+        
+        const displayContent = data.edited_content || data.content;
+        const isEdited = Boolean(data.edited_content);
+        
+        cols[0].querySelector('.word-page').innerHTML = marked.parse(displayContent);
+        cols[1].querySelector('.word-page').innerHTML = marked.parse(removeDynamicBlock(displayContent));
+        
+        if (isEdited) {
+            const originalHeader = cols[0].querySelector('.col-header');
+            if (originalHeader) {
+                originalHeader.innerHTML = `
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                        ОРИГИНАЛ 
+                        <span style="color: #2196f3; font-size: 11px; font-weight: normal;">ред.</span>
+                    </span>
+                `;
+            }
+        }
+
+        const parsedCol = cols[2].querySelector('.word-page');
+        if (data.parsed) {
+            const tplId = document.getElementById('template-select').value;
+            if (tplId) currentTemplateId = tplId;
+
+            const actionsDiv = document.getElementById(`xml-actions-${id}`);
+            if (actionsDiv) actionsDiv.style.display = 'flex';
+            
+            parsedCol.innerHTML = `
+                <div class="xml-block" id="xml-block-${id}">${escapeHtml(data.parsed)}</div>
+                <div style="margin-top: 8px; font-size: 11px; color: #666;" id="rag-info-${id}">
+                    Загрузка информации о RAG...
+                </div>
+                <div class="chat-container">
+                    <div class="chat-header">
+                        <span>${document.getElementById('template-select').value === 'auto' ? 'Локальная коррекция' : 'Коррекция шаблона'}</span>
+                        ${document.getElementById('template-select').value === 'auto' 
+                            ? '' 
+                            : '<button class="toolbar-btn" onclick="openVersionHistory()">История версий</button>'}
+                    </div>
+                    <div class="chat-messages" id="chat-messages-${id}">
+                        <div class="chat-msg system">
+                            ${document.getElementById('template-select').value === 'auto'
+                                ? 'Напишите замечание - система исправит текущую статью и обновит RAG-базу.'
+                                : 'Заметили ошибку? Напишите правило, и ИИ обновит промпт.'}
+                        </div>
+                    </div>
+                    <div class="chat-input-row">
+                        <input type="text" id="chat-input-${id}" 
+                               placeholder="${document.getElementById('template-select').value === 'auto' 
+                                   ? 'Напр: в <individualInfo> не должно быть ORCID' 
+                                   : 'Напр: в тэге <individualInfo> не должно быть ORCID'}" 
+                               onkeypress="if(event.key==='Enter') sendRemark('${id}', 'article')">
+                    </div>
+                    ${document.getElementById('template-select').value === 'auto' 
+                        ? `
+                        <div style="margin-top:5px;">
+                            <button class="toolbar-btn" style="width:100%; font-size:11px; padding: 6px;" onclick="sendRemark('${id}', 'article')">Исправить XML этой статьи</button>
+                        </div>
+                        `
+                        : `
+                        <div style="display:flex; gap:5px; margin-top:5px;">
+                            <button class="toolbar-btn" style="flex:1; font-size:11px; padding: 6px;" onclick="sendRemark('${id}', 'article')">Эту статью</button>
+                            <button class="toolbar-btn" style="flex:1; font-size:11px; padding: 6px;" onclick="sendRemark('${id}', 'journal')">Весь журнал</button>
+                        </div>
+                        `
+                    }
+                </div>`.trim();
+        } else {
+            parsedCol.innerHTML = `<div style="text-align:center;padding:40px;color:#888">Статья ещё не обработана</div>`;
+        }
+    } catch (err) {
+        content.innerHTML = `<div style="color:#c00;padding:20px">Ошибка: ${err.message}</div>`;
+    }
+    window.scrollTo(0, 0);
+
+    checkAndLockChat(id);
+    if (window._chatLockPoller) clearInterval(window._chatLockPoller);
+    window._chatLockPoller = setInterval(() => checkAndLockChat(id), 2000);
+
+    fetch(`/parse/result/${id}`)
+        .then(r => r.json())
+        .then(resultData => {
+            const ragInfo = document.getElementById(`rag-info-${id}`);
+            if (!ragInfo) return;
+            
+            const source = resultData.rag_source || 'unknown';
+            
+            if (source === 'rag') {
+                ragInfo.innerHTML = `
+                    <span class="rag-badge">RAG-автоподбор</span>
+                    Сходство с примером: <b>${(resultData.rag_similarity * 100).toFixed(1)}%</b>
+                `;
+                ragInfo.style.display = 'block';
+            } else if (source === 'template') {
+                ragInfo.innerHTML = `
+                    <span class="rag-badge" style="background:#fff3e0;color:#e65100;">📋 Строгий шаблон</span>
+                `;
+                ragInfo.style.display = 'block';
+            } else {
+                ragInfo.style.display = 'none';
+            }
+        })
+        .catch(e => console.error('Ошибка загрузки инфо:', e));
+}
+
+function paginateHTML(html, container) {
+    const temp = document.createElement('div'); temp.style.display='none'; temp.innerHTML=html; document.body.appendChild(temp);
+    const nodes = Array.from(temp.childNodes).filter(n => n.nodeType!==Node.TEXT_NODE || n.textContent.trim());
+    let page = createPage(); container.appendChild(page);
+    nodes.forEach(node => {
+        const clone = node.cloneNode(true); page.appendChild(clone);
+        if(page.scrollHeight > 1056) {
+            if(page.children.length===1) return;
+            page.removeChild(clone);
+            page = createPage(); container.appendChild(page);
+            page.appendChild(clone);
+        }
+    });
+    document.body.removeChild(temp);
+}
+function createPage() { const p=document.createElement('div'); p.className='word-page'; return p; }
+
+function showGrid() {
+    if (window._chatLockPoller) {
+        clearInterval(window._chatLockPoller);
+        window._chatLockPoller = null;
+    }
+
+    if (window._parsePollers) {
+        Object.entries(window._parsePollers).forEach(([aid, interval]) => {
+            clearInterval(interval);
+            delete window._parsePollers[aid];
+        });
+    }
+    
+    const grid = document.getElementById('articles-grid');
+    const viewer = document.getElementById('viewer-section');
+    const warnings = document.getElementById('warnings-panel');
+    
+    if (articlesList && articlesList.length > 0) {
+        viewer.style.display = 'none';
+        grid.style.display = 'flex';
+        if (warnings.innerHTML.trim()) warnings.style.display = 'flex';
+    } else if (currentFile) {
+        handleUpload(null, true);
+    }
+    
+    window.scrollTo(0, 0);
+}
+
+async function loadTemplates() {
+    try {
+        const res = await fetch('/memory');
+        const templates = await res.json();
+        const select = document.getElementById('template-select');
+        const container = document.getElementById('templates-container');
+        
+        select.innerHTML = '';
+        
+        const autoOpt = document.createElement('option');
+        autoOpt.value = 'auto';
+        autoOpt.textContent = 'Автоподбор шаблона';
+        autoOpt.title = 'Система автоматически подберёт наиболее подходящий пример из базы знаний';
+        select.appendChild(autoOpt);
+        
+        const divider = document.createElement('option');
+        divider.disabled = true;
+        divider.textContent = '─────────────';
+        select.appendChild(divider);
+        
+        templates.forEach(tpl => {
+            const opt = document.createElement('option');
+            opt.value = tpl.id;
+            opt.textContent = `📋 ${tpl.name}`;
+            select.appendChild(opt);
+        });
+        
+        if (templates.length === 0) {
+            container.innerHTML = '<em style="color:#888">Нет сохранённых шаблонов</em>';
+        } else {
+            container.innerHTML = templates.map(tpl => `
+                <div class="template-item">
+                    <span>${tpl.name}</span>
+                    <button onclick="deleteTemplate('${tpl.id}')">Удалить</button>
+                </div>
+            `).join('');
+        }
+    } catch(e) {
+        console.error(e);
+    }
+}
+
+async function saveTemplate() {
+    const name = document.getElementById('tpl-name').value.trim();
+    const before = document.getElementById('tpl-before').value.trim();
+    const after = document.getElementById('tpl-after').value.trim();
+    if(!name) { alert('Введите название'); return; }
+    if(!before || !after) { alert('Заполните оба поля'); return; }
+    const res = await fetch('/memory', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name, before, after}) });
+    const data = await res.json();
+    if(data.error) { alert('Ошибка: ' + data.error); return; }
+    document.getElementById('tpl-name').value = ''; document.getElementById('tpl-before').value = ''; document.getElementById('tpl-after').value = '';
+    alert('Шаблон сохранён'); loadTemplates(); closeModal('memory-modal');
+}
+
+async function deleteTemplate(id) {
+    if(!confirm('Удалить шаблон?')) return;
+    const res = await fetch(`/memory/${id}`, {method: 'DELETE'});
+    const data = await res.json();
+    if(data.success) loadTemplates(); else alert('Ошибка удаления');
+}
+
+document.addEventListener('click', (e) => {
+    const item = e.target.closest('.grid-item');
+    if(item && item.id?.startsWith('grid-item-')) {}
+});
+
+let currentTemplateId = "";
+
+async function startParsing() {
+    const templateId = document.getElementById('template-select').value;
+    if (!templateId || templateId === '') {
+        alert('Выберите режим обработки: Авто (RAG) или конкретный шаблон');
+        return;
+    }
+    
+    if (!articlesList || articlesList.length === 0) {
+        alert('Сначала настройте предобработку и нажмите "Применить и закрыть" в настройках,\nчтобы разбить документ на статьи.');
+        return;
+    }
+    
+    const btn = document.getElementById('btn-start-parse');
+    const status = document.getElementById('processing-status');
+    const progress = document.getElementById('progress-text');
+    
+    btn.disabled = true;
+    status.classList.add('active');
+    progress.textContent = 'Подготовка к парсингу...';
+    
+    try {
+        const res = await fetch('/parse/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                template_id: templateId,
+                article_ids: articlesList.map(a => a.id)
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (data.error) {
+            alert('Ошибка: ' + data.error);
+            resetParsingUI();
+            return;
+        }
+        
+        const templateSelect = document.getElementById('template-select');
+        const isAutoMode = templateSelect.value === 'auto';
+        const modeText = isAutoMode 
+            ? '(RAG-автоподбор)' 
+            : `(Шаблон: ${templateSelect.options[templateSelect.selectedIndex].text.replace('📋 ', '')})`;
+        
+        let statusText = `Запуск анализа ${data.total} статей ${modeText}`;
+        if (data.skipped) {
+            const skippedTotal = (data.skipped.hidden || 0) + (data.skipped.deleted || 0);
+            if (skippedTotal > 0) {
+                const parts = [];
+                if (data.skipped.hidden > 0) parts.push(`${data.skipped.hidden} скрыто`);
+                if (data.skipped.deleted > 0) parts.push(`${data.skipped.deleted} удалено`);
+                statusText += ` (пропущено: ${parts.join(', ')})`;
+            }
+        }
+        progress.textContent = statusText + '...';
+        
+        if (parsingPoller) clearInterval(parsingPoller);
+        parsingPoller = setInterval(async () => {
+            try {
+                const st = await fetch('/parse/status').then(r => r.json());
+                progress.textContent = `Обработка: ${st.current}/${st.total}`;
+                if (!st.active) {
+                    clearInterval(parsingPoller);
+                    progress.textContent = `Готово (${st.total} статей)`;
+                    setTimeout(() => {
+                        resetParsingUI();
+                        loadAllParsed();
+                    }, 800);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }, 3000);
+        
+    } catch (e) {
+        alert('Ошибка запуска: ' + e.message);
+        resetParsingUI();
+    }
+}
+
+function resetParsingUI() {
+    document.getElementById('btn-start-parse').disabled = false;
+    document.getElementById('processing-status').classList.remove('active');
+    if(parsingPoller) clearInterval(parsingPoller);
+}
+
+async function loadAllParsed() {
+    for(const art of articlesList) {
+        const res = await fetch(`/parse/result/${art.id}`);
+        if(res.ok) { const data = await res.json(); if(data.xml) articles_db[art.id] = {...articles_db[art.id], parsed: data.xml}; }
+    }
+    if(document.getElementById('articles-grid').style.display !== 'none') renderGrid();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
+}
+
+async function sendRemark(aid, scope) {
+    const input = document.getElementById(`chat-input-${aid}`);
+    const remark = input.value.trim();
+    if (!remark) return;
+    
+    const messages = document.getElementById(`chat-messages-${aid}`);
+    messages.innerHTML += `<div class="chat-msg user"><b>Вы:</b> ${escapeHtml(remark)}</div>`;
+    
+    let scopeText = "Обновление промпта...";
+    if (scope === 'article') scopeText = "Исправляю статью...";
+    else if (scope === 'journal') scopeText = "Исправляю весь журнал...";
+    else scopeText = "Переписываю промпт и сохраняю его...";
+    
+    messages.innerHTML += `<div class="chat-msg system" id="loading-msg-${aid}">${scopeText}</div>`;
+    input.value = '';
+    messages.scrollTop = messages.scrollHeight;
+
+    const xmlBlock = document.querySelector(`#viewer .xml-block`);
+    const currentXml = xmlBlock ? xmlBlock.innerText : "";
+
+    const originalPage = document.querySelector(`#original-${aid}`);
+    const originalText = originalPage ? originalPage.innerText : "";
+
+    try {
+        const res = await fetch('/prompt/refine', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                template_id: currentTemplateId || document.getElementById('template-select').value,
+                article_id: aid,
+                remark: remark,
+                apply_scope: scope,
+                current_xml: currentXml,
+                original_text: originalText
+            })
+        });
+        
+        const loading = document.getElementById(`loading-msg-${aid}`);
+        if(loading) loading.remove();
+        
+        if (!res.ok) {
+            const errData = await res.json();
+            messages.innerHTML += `<div class="chat-msg error">❌ Ошибка сервера: ${errData.error || 'Сбой генерации'}</div>`;
+            return;
+        }
+        
+        const data = await res.json();
+        messages.innerHTML += `<div class="chat-msg ai"><b>ИИ (V${data.new_version}):</b> ${data.msg}</div>`;
+        
+        if (scope === 'article') {
+            pollForNewResult(aid);
+        } else if (scope === 'journal') {
+            startGlobalPolling();
+        }
+        
+    } catch(e) {
+        const loading = document.getElementById(`loading-msg-${aid}`);
+        if(loading) loading.remove();
+        messages.innerHTML += `<div class="chat-msg error">Ошибка сети: ${e.message}</div>`;
+    }
+}
+
+async function pollForNewResult(aid) {
+    let attempts = 0;
+    const messages = document.getElementById(`chat-messages-${aid}`);
+    const interval = setInterval(async () => {
+        attempts++;
+        try {
+            const res = await fetch(`/parse/result/${aid}`);
+            
+            if (res.status === 500) {
+                clearInterval(interval);
+                const errData = await res.json();
+                messages.innerHTML += `<div class="chat-msg error">❌ Ошибка анализа: ${errData.error || 'Сбой генерации XML'}. Проверьте "Историю версий" и откатитесь к V1.</div>`;
+                return;
+            }
+            
+            if (res.ok) {
+                const data = await res.json();
+                if (data.xml) {
+                    clearInterval(interval);
+                    document.querySelector('.xml-block').innerText = data.xml;
+                    messages.innerHTML += `<div class="chat-msg system">Готово! XML обновлён.</div>`;
+                } else if (data.status === 'pending' && attempts > 40) {
+                    clearInterval(interval);
+                    messages.innerHTML += `<div class="chat-msg error">Таймаут ожидания.</div>`;
+                }
+            }
+        } catch(e) { /* ignore */ }
+    }, 2000);
+}
+
+function startGlobalPolling() {
+    const btn = document.getElementById('btn-start-parse');
+    const progress = document.getElementById('progress-text');
+    const status = document.getElementById('processing-status');
+    btn.disabled = true;
+    status.classList.add('active');
+    progress.textContent = 'Запуск журнала...';
+    
+    if(parsingPoller) clearInterval(parsingPoller);
+    parsingPoller = setInterval(async () => {
+        try {
+            const st = await fetch('/parse/status').then(r => r.json());
+            progress.textContent = `Обработка: ${st.current}/${st.total}`;
+            if(!st.active) { 
+                clearInterval(parsingPoller); 
+                progress.textContent = 'Готово'; 
+                setTimeout(() => { resetParsingUI(); loadAllParsed(); }, 800); 
+            }
+        } catch(e) { console.error(e); }
+    }, 2000);
+}
+
+async function openVersionHistory() {
+    if (!currentTemplateId) { alert('Сначала выберите шаблон и запустите парсинг'); return; }
+    const res = await fetch(`/prompt/history/${currentTemplateId}`);
+    const data = await res.json();
+    const list = document.getElementById('version-list');
+    
+    list.innerHTML = data.versions.slice().reverse().map(v => `
+        <div class="version-item ${v.v === data.active ? 'active' : ''}">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <b>Версия ${v.v} ${v.v === data.active ? '<span style="color:green">(Активная)</span>' : ''}</b>
+                <span style="color: #888; font-size: 12px;">${v.timestamp || ''}</span>
+            </div>
+            ${v.remark ? `<div style="color: #d32f2f; margin: 5px 0; font-size: 13px;"><b>Замечание:</b> ${escapeHtml(v.remark)}</div>` : ''}
+            <pre class="version-pre">${escapeHtml(v.instruction)}</pre>
+            ${v.v !== data.active ? `<button class="toolbar-btn" style="margin-top:8px;" onclick="rollbackVersion(${v.v})">Откатиться к этой версии</button>` : ''}
+        </div>
+    `).join('');
+    openModal('version-modal');
+}
+
+async function rollbackVersion(v) {
+    if(!confirm(`Откатиться к версии ${v}? Текущие изменения будут сохранены в истории, но активной станет V${v}.`)) return;
+    const res = await fetch('/prompt/rollback', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({template_id: currentTemplateId, version: v})
+    });
+    const data = await res.json();
+    if (data.success) {
+        alert('Откат выполнен! Запустите парсинг заново, чтобы применить старую версию.');
+        closeModal('version-modal');
+    }
+}
+
+async function openBasePromptEditor() {
+    try {
+        const res = await fetch('/prompt/base');
+        const data = await res.json();
+        document.getElementById('base-prompt-text').value = data.instruction;
+        openModal('base-prompt-modal');
+    } catch(e) {
+        alert('Не удалось загрузить промпт');
+    }
+}
+
+async function saveBasePrompt() {
+    const instruction = document.getElementById('base-prompt-text').value.trim();
+    if (!instruction) { alert('Промпт не может быть пустым'); return; }
+    try {
+        const res = await fetch('/prompt/base', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({instruction})
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('Базовый промпт сохранён!\nНовые шаблоны будут использовать обновлённую инструкцию.');
+            closeModal('base-prompt-modal');
+        }
+    } catch(e) {
+        alert('Ошибка сохранения');
+    }
+}
+
+async function resetBasePrompt() {
+    if (!confirm('Сбросить промпт к стандартному?\nВсе ваши изменения базовой версии будут безвозвратно удалены.')) return;
+    try {
+        const res = await fetch('/prompt/base/reset', {method: 'POST'});
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('base-prompt-text').value = data.instruction;
+            alert('Промпт сброшен к стандартному.');
+        }
+    } catch(e) {
+        alert('Ошибка сброса');
+    }
+}
+
+async function testSplitPattern() {
+    const pattern = document.getElementById('split-pattern-input').value.trim();
+    if (!currentFile) { 
+        document.getElementById('split-test-result').innerHTML = 
+            '<div class="test-result error">Сначала загрузите файл журнала</div>';
+        return; 
+    }
+    const resultDiv = document.getElementById('split-test-result');
+    resultDiv.innerHTML = '<div class="test-result" style="background:#e3f2fd;color:#1565c0;">Тестирование...</div>';
+    
+    const fd = new FormData();
+    fd.append('file', currentFile);
+    fd.append('split_pattern', pattern);
+    fd.append('test_only', '1');
+    
+    const periodicity = document.getElementById('periodicity-input')?.value || '1';
+    const position = document.querySelector('input[name="position"]:checked')?.value || 'bottom';
+    fd.append('periodicity', periodicity);
+    fd.append('position', position);
+    
+    stopWords.forEach(w => fd.append('stop_words[]', w));
+    startWords.forEach(w => fd.append('start_words[]', w));
+    endWords.forEach(w => fd.append('end_words[]', w));
+    
+    try {
+        const res = await fetch('/upload', {method:'POST', body:fd});
+        const data = await res.json();
+        if (data.count !== undefined) {
+            const msg = data.count === 1 
+                ? `Найдена <b>1 статья</b>. Проверьте корректность параметров.`
+                : `Найдено статей: <b>${data.count}</b>`;
+            resultDiv.innerHTML = `<div class="test-result success">✓ ${msg}</div>`;
+        } else {
+            resultDiv.innerHTML = `<div class="test-result error">✗ ${data.error || 'Не удалось разбить файл'}</div>`;
+        }
+    } catch(e) {
+        resultDiv.innerHTML = `<div class="test-result error">Ошибка сети: ${e.message}</div>`;
+    }
+}
+
+async function applySettingsAndClose() {
+    closeModal('preprocess-modal');
+    
+    const tagSaved = await saveTextTagSetting();
+    if (!tagSaved) return;
+
+    if (!currentFile) {
+        alert('Сначала загрузите файл журнала');
+        return;
+    }
+    
+    const viewerSection = document.getElementById('viewer-section');
+    if (viewerSection) {
+        viewerSection.style.display = 'none';
+    }
+    
+    const check = document.getElementById('status-check');
+    check.className = 'check-circle loading';
+    
+    const btn = document.getElementById('btn-start-parse');
+    const status = document.getElementById('processing-status');
+    const progress = document.getElementById('progress-text');
+    
+    status.classList.add('active');
+    progress.textContent = 'Разбиение документа на статьи...';
+    
+    try {
+        const fd = new FormData();
+        fd.append('file', currentFile);
+        
+        fd.append('split_pattern', document.getElementById('split-pattern-input')?.value || '');
+        fd.append('periodicity', document.getElementById('periodicity-input')?.value || '1');
+        fd.append('position', document.querySelector('input[name="position"]:checked')?.value || 'bottom');
+        
+        stopWords.forEach(w => fd.append('stop_words[]', w));
+        startWords.forEach(w => fd.append('start_words[]', w));
+        endWords.forEach(w => fd.append('end_words[]', w));
+        
+        const res = await fetch('/upload', {method: 'POST', body: fd});
+        const data = await res.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        articlesList = data.articles;
+        
+        if (!articlesList || articlesList.length === 0) {
+            throw new Error('Не удалось разбить документ на статьи. Проверьте настройки разделителя.');
+        }
+        
+        progress.textContent = `Найдено статей: ${articlesList.length}`;
+        
+        renderGrid();
+        
+        check.className = 'check-circle success';
+        
+        setTimeout(() => {
+            status.classList.remove('active');
+        }, 2000);
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+    } catch (err) {
+        alert('Ошибка разбивки: ' + err.message);
+        check.className = 'check-circle';
+        status.classList.remove('active');
+    }
+}
+
+let collectedExamples = [];
+let collectionActive = false;
+
+function startExampleCollection() {
+    if (!currentFile) {
+        alert('Сначала загрузите файл журнала!');
+        return;
+    }
+    collectionActive = true;
+    collectedExamples = [];
+    updateExamplesUI();
+    document.getElementById('collection-panel').style.display = 'block';
+    document.getElementById('start-collect-btn').style.display = 'none';
+    
+    if (document.getElementById('preprocess-modal').classList.contains('open')) {
+        setTimeout(() => {
+            if (confirm('Закрыть настройки, чтобы перейти к статьям и собрать примеры?\n\n(Собранные примеры сохранятся)')) {
+                closeModal('preprocess-modal');
+            }
+        }, 300);
+    }
+}
+
+function cancelCollection() {
+    collectionActive = false;
+    collectedExamples = [];
+    document.getElementById('collection-panel').style.display = 'none';
+    document.getElementById('start-collect-btn').style.display = 'inline-block';
+    document.getElementById('examples-list').innerHTML = '';
+    document.getElementById('synthesize-main-btn').style.display = 'none';
+}
+
+function addCurrentSelection() {
+    const selection = window.getSelection().toString().trim();
+    
+    if (!selection) {
+        alert('Сначала выделите текст мышкой в колонке "ОРИГИНАЛ" открытой статьи!');
+        return;
+    }
+    
+    if (selection.length < 30) {
+        alert('Выделено слишком мало текста (минимум 30 символов).\n\nВыделяйте полный блок "Формат цитирования" с авторами и DOI.');
+        return;
+    }
+    
+    if (selection.length > 1500) {
+        alert('Выделено слишком много текста (максимум 1500 символов).\n\nВыделяйте только блок цитирования, без основного текста.');
+        return;
+    }
+    
+    if (collectedExamples.includes(selection)) {
+        alert('Этот пример уже добавлен. Выделите пример из ДРУГОЙ статьи.');
+        return;
+    }
+    
+    collectedExamples.push(selection);
+    updateExamplesUI();
+    
+    window.getSelection().removeAllRanges();
+    
+    if (collectedExamples.length < 3) {
+        setTimeout(() => {
+            alert(`Пример ${collectedExamples.length} добавлен!\n\nТеперь перейдите к СЛЕДУЮЩЕЙ статье (через "Назад к списку") и выделите её блок цитирования.`);
+        }, 100);
+    }
+}
+
+function updateExamplesUI() {
+    document.getElementById('panel-example-count').innerText = collectedExamples.length;
+    
+    const list = document.getElementById('examples-list');
+    if (collectedExamples.length === 0) {
+        list.innerHTML = '';
+        document.getElementById('synthesize-main-btn').style.display = 'none';
+        return;
+    }
+    
+    list.innerHTML = collectedExamples.map((ex, i) => `
+        <div style="margin: 8px 0; padding: 8px; background: #fff; border-radius: 3px; font-size: 11px; font-family: 'Consolas', monospace; border-left: 3px solid #4caf50;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <b>Пример ${i+1}:</b>
+                <button onclick="removeExample(${i})" style="background: none; border: none; cursor: pointer; color: #c00; font-size: 14px;">&times;</button>
+            </div>
+            <div style="color: #555; word-break: break-all;">${escapeHtml(ex.substring(0, 120))}${ex.length > 120 ? '...' : ''}</div>
+        </div>
+    `).join('');
+    
+    if (collectedExamples.length >= 2) {
+        document.getElementById('synthesize-main-btn').style.display = 'inline-block';
+    }
+}
+
+function removeExample(index) {
+    collectedExamples.splice(index, 1);
+    updateExamplesUI();
+}
+
+function finishCollection() {
+    if (collectedExamples.length < 2) {
+        alert('Нужно минимум 2 примера для синтеза!');
+        return;
+    }
+    document.getElementById('collection-panel').style.display = 'none';
+    collectionActive = false;
+    
+    openModal('preprocess-modal');
+    
+    setTimeout(() => synthesizeFromExamples(), 500);
+}
+
+async function synthesizeFromExamples() {
+    if (collectedExamples.length < 2) {
+        alert('Нужно минимум 2 примера!');
+        return;
+    }
+    
+    const resultDiv = document.getElementById('synthesis-result');
+    resultDiv.innerHTML = '<div class="test-result" style="background:#e3f2fd;color:#1565c0;">Синтез паттерна из примеров...</div>';
+    
+    try {
+        const res = await fetch('/synthesize-pattern', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({examples: collectedExamples})
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            const matchInfo = data.matches_found !== null 
+                ? `<b>Совпадений в документе:</b> <b>${data.matches_found}</b>` 
+                : '<span style="color:#888;">Документ не загружен</span>';
+            
+            resultDiv.innerHTML = `
+                <div class="test-result success">
+                    <b>Паттерн синтезирован!</b><br>
+                    ${matchInfo}<br>
+                    <b>Паттерн:</b> <code style="background:#f5f5f5;padding:2px 6px;border-radius:2px;font-size:11px;word-break:break-all;">${escapeHtml(data.regex)}</code><br>
+                    <b>Объяснение:</b> ${escapeHtml(data.explanation)}
+                </div>
+            `;
+            
+            document.getElementById('split-pattern-input').value = data.regex;
+            
+            if (data.matches_found && data.matches_found > 0) {
+                setTimeout(() => {
+                    const periodicity = parseInt(document.getElementById('periodicity-input').value) || 1;
+                    const estimated = Math.ceil(data.matches_found / periodicity);
+                    alert(`Найдено ${data.matches_found} вхождений маркера.\n\n` +
+                          `При периодичности ${periodicity} ожидается ~${estimated} статей.\n\n` +
+                          `Нажмите "Запустить парсинг" для применения.`);
+                }, 500);
+            }
+        } else {
+            resultDiv.innerHTML = `<div class="test-result error">❌ ${data.error}</div>`;
+        }
+    } catch(e) {
+        resultDiv.innerHTML = `<div class="test-result error">Ошибка сети: ${e.message}</div>`;
+    }
+}
+
+function applySynthesizedPattern() {
+    const regexInput = document.getElementById('split-pattern-input');
+    const resultHtml = document.getElementById('synthesis-result').innerHTML;
+    const match = resultHtml.match(/<code[^>]*>([^<]+)<\/code>/);
+    if (match) {
+        regexInput.value = match[1];
+    }
+    
+    const matchCountMatch = resultHtml.match(/Совпадений в документе:\s*<b>(\d+)<\/b>/);
+    if (matchCountMatch) {
+        const totalMatches = parseInt(matchCountMatch[1]);
+        const periodicity = parseInt(document.getElementById('periodicity-input').value) || 1;
+        const estimatedArticles = Math.ceil(totalMatches / periodicity);
+        
+        if (estimatedArticles > 0 && estimatedArticles < 100) {
+            setTimeout(() => {
+                alert(`Найдено ${totalMatches} вхождений маркера.\n\n` +
+                      `При периодичности ${periodicity} ожидается ~${estimatedArticles} статей.\n\n` +
+                      `Если число не совпадает с реальным количеством статей:\n` +
+                      `• Измените параметр "Сколько раз встречается"\n` +
+                      `• Проверьте позицию маркера (вверху/внизу)`);
+            }, 500);
+        }
+    }
+    
+    setTimeout(() => testSplitPattern(), 300);
+}
+
+function updatePositionHint() {
+    const position = document.querySelector('input[name="position"]:checked')?.value;
+    const hint = document.getElementById('position-hint');
+    if (position === 'top') {
+        hint.innerHTML = '💡 Разрез будет сделан <b>перед</b> каждым найденным маркером';
+    } else {
+        hint.innerHTML = '💡 Разрез будет сделан <b>после</b> каждого найденного маркера';
+    }
+}
+
+async function openRAGModal() {
+    try {
+        const [statsRes, examplesRes] = await Promise.all([
+            fetch('/rag/stats'),
+            fetch('/rag/examples')
+        ]);
+        
+        const stats = await statsRes.json();
+        const examples = await examplesRes.json();
+        
+        const statsText = document.getElementById('rag-stats-text');
+        statsText.innerHTML = `
+            Всего примеров: <b>${stats.total_examples}</b> | 
+            Шаблонов использовано: <b>${stats.templates_used}</b> | 
+            Последнее добавление: <b>${stats.newest || 'нет'}</b>
+        `;
+        
+        const list = document.getElementById('rag-examples-list');
+        if (examples.length === 0) {
+            list.innerHTML = '<p style="text-align: center; color: #888; padding: 40px;">База пуста. Примеры будут добавляться автоматически после успешных парсингов.</p>';
+        } else {
+            list.innerHTML = examples.map(ex => `
+                <div style="padding: 12px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                        <div>
+                            <b>ID:</b> <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 2px; font-size: 11px;">${ex.id.substring(0, 12)}...</code><br>
+                            <b>Шаблон:</b> ${ex.source_template || 'неизвестен'}<br>
+                            <b>Добавлен:</b> ${ex.timestamp}
+                        </div>
+                        <button class="toolbar-btn" style="background: #ffebee; color: #c62828; border-color: #ffcdd2;" 
+                                onclick="deleteRAGExample('${ex.id}')">Удалить</button>
+                    </div>
+                    <details style="margin-top: 8px;">
+                        <summary style="cursor: pointer; font-size: 12px; color: #2b579a;">Показать содержимое</summary>
+                        <div style="margin-top: 8px;">
+                            <b>До (${ex.before_length} симв.):</b>
+                            <pre style="background: #fafafa; padding: 8px; border-radius: 3px; font-size: 10px; max-height: 150px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ex.before_preview)}</pre>
+                            <b>После (${ex.after_length} симв.):</b>
+                            <pre style="background: #fafafa; padding: 8px; border-radius: 3px; font-size: 10px; max-height: 150px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ex.after_preview)}</pre>
+                        </div>
+                    </details>
+                </div>
+            `).join('');
+        }
+        
+        openModal('rag-modal');
+    } catch (e) {
+        alert('Ошибка загрузки: ' + e.message);
+    }
+}
+
+async function deleteRAGExample(id) {
+    if (!confirm('Удалить этот пример из базы?')) return;
+    
+    try {
+        const res = await fetch(`/rag/example/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            alert('Пример удалён');
+            openRAGModal();
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function loadTextTagSetting() {
+    try {
+        const res = await fetch('/settings/text-tag');
+        const data = await res.json();
+        if (data.tag_name) {
+            document.getElementById('text-tag-input').value = data.tag_name;
+            document.getElementById('text-tag-input-mirror').value = data.tag_name;
+            localStorage.setItem('textTagName', data.tag_name);
+        }
+    } catch(e) {
+        const saved = localStorage.getItem('textTagName');
+        if (saved) {
+            document.getElementById('text-tag-input').value = saved;
+            document.getElementById('text-tag-input-mirror').value = saved;
+        }
+    }
+    
+    document.getElementById('text-tag-input').addEventListener('input', (e) => {
+        document.getElementById('text-tag-input-mirror').value = e.target.value;
+    });
+}
+
+async function saveTextTagSetting() {
+    const tagName = document.getElementById('text-tag-input').value.trim();
+    if (!tagName) {
+        alert('Имя тега не может быть пустым');
+        return false;
+    }
+    
+    try {
+        const res = await fetch('/settings/text-tag', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tag_name: tagName})
+        });
+        const data = await res.json();
+        if (data.success) {
+            localStorage.setItem('textTagName', tagName);
+            return true;
+        } else {
+            alert('Ошибка: ' + data.error);
+            return false;
+        }
+    } catch(e) {
+        alert('Ошибка сети: ' + e.message);
+        return false;
+    }
+}
+
+function ensureEditModal() {
+    if (document.getElementById('edit-article-modal')) return;
+    
+    const modal = document.createElement('div');
+    modal.id = 'edit-article-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 1000px;">
+            <div class="modal-header">
+                <span class="modal-title">Редактирование текста статьи</span>
+                <button class="modal-close" onclick="closeModal('edit-article-modal')">&times;</button>
+            </div>
+            <div style="background: #e3f2fd; padding: 12px; border-radius: 4px; margin-bottom: 12px;">
+                <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #1565c0;">
+                    <b>Non-destructive editing:</b> оригинальный документ остаётся без изменений. 
+                    Отредактированная версия используется только для парсинга.
+                </p>
+            </div>
+            <textarea id="edit-article-textarea" style="width: 100%; min-height: 500px; padding: 12px; border: 1px solid #ccc; border-radius: 3px; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.5; box-sizing: border-box;"></textarea>
+            <div style="display: flex; justify-content: space-between; margin-top: 16px; align-items: center;">
+                <div>
+                    <span id="edit-chars-count" style="color: #666; font-size: 12px;"></span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="toolbar-btn" onclick="resetArticleEdits()">Сбросить к оригиналу</button>
+                    <button class="toolbar-btn" onclick="closeModal('edit-article-modal')">Отмена</button>
+                    <button class="toolbar-btn btn-start" onclick="saveArticleEdits()">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+let currentEditArticleId = null;
+let originalArticleContent = null;
+
+async function editArticle(aid) {
+    ensureEditModal();
+    currentEditArticleId = aid;
+    
+    try {
+        const res = await fetch(`/article/${aid}`);
+        const data = await res.json();
+        
+        originalArticleContent = data.content;
+        const textarea = document.getElementById('edit-article-textarea');
+        textarea.value = data.edited_content || data.content;
+        
+        updateCharsCount();
+        textarea.oninput = updateCharsCount;
+        
+        openModal('edit-article-modal');
+    } catch(e) {
+        alert('Ошибка загрузки: ' + e.message);
+    }
+}
+
+function updateCharsCount() {
+    const textarea = document.getElementById('edit-article-textarea');
+    const count = document.getElementById('edit-chars-count');
+    const len = textarea.value.length;
+    const originalLen = originalArticleContent?.length || 0;
+    const diff = len - originalLen;
+    const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
+    count.innerHTML = `Символов: <b>${len.toLocaleString()}</b> ${originalLen ? `(изменение: ${diffStr})` : ''}`;
+}
+
+async function saveArticleEdits() {
+    const textarea = document.getElementById('edit-article-textarea');
+    const content = textarea.value.trim();
+    
+    if (!content) {
+        alert('Содержимое не может быть пустым');
+        return;
+    }
+    
+    try {
+        const res = await fetch(`/article/edit/${currentEditArticleId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content: content})
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            closeModal('edit-article-modal');
+            alert('Статья отредактирована');
+            renderGrid();
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch(e) {
+        alert('Ошибка сети: ' + e.message);
+    }
+}
+
+async function resetArticleEdits() {
+    if (!confirm('Сбросить все изменения и вернуться к оригинальному тексту?')) return;
+    
+    try {
+        const res = await fetch(`/article/reset-edits/${currentEditArticleId}`, {method: 'POST'});
+        const data = await res.json();
+        
+        if (data.success) {
+            document.getElementById('edit-article-textarea').value = originalArticleContent;
+            updateCharsCount();
+            alert('Сброшено к оригиналу');
+        }
+    } catch(e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function toggleHideArticle(aid) {
+    try {
+        const res = await fetch(`/article/${aid}`);
+        const data = await res.json();
+        
+        const endpoint = data.hidden ? `/article/restore/${aid}` : `/article/hide/${aid}`;
+        const actionRes = await fetch(endpoint, {method: 'POST'});
+        const actionData = await actionRes.json();
+        
+        if (actionData.success) {
+            const item = document.getElementById(`grid-item-${aid}`);
+            const hideBtn = document.getElementById(`hide-btn-${aid}`);
+            
+            if (data.hidden) {
+                item.classList.remove('hidden-article');
+                hideBtn.innerHTML = '👁️';
+            } else {
+                item.classList.add('hidden-article');
+                hideBtn.innerHTML = '✓';
+            }
+        }
+    } catch(e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+function deleteArticleConfirm(aid) {
+    if (confirm('Удалить статью из списка?\n\nОригинальный документ не изменится.\nСтатья не будет участвовать в парсинге.')) {
+        deleteArticle(aid);
+    }
+}
+
+async function deleteArticle(aid) {
+    try {
+        const res = await fetch(`/article/delete/${aid}`, {method: 'POST'});
+        const data = await res.json();
+        
+        if (data.success) {
+            const item = document.getElementById(`grid-item-${aid}`);
+            if (item) item.classList.add('deleted-article');
+        }
+    } catch(e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function checkAndLockChat(aid) {
+    try {
+        const res = await fetch('/parse/status');
+        const status = await res.json();
+        
+        const chatInput = document.getElementById(`chat-input-${aid}`);
+        const chatButtons = document.querySelectorAll(`[onclick*="sendRemark('${aid}'"]`);
+        const chatContainer = document.querySelector(`#chat-messages-${aid}`)?.parentElement;
+        
+        if (!chatInput) return;
+        
+        if (status.active) {
+            chatInput.disabled = true;
+            chatInput.placeholder = 'Дождитесь завершения парсинга...';
+            chatButtons.forEach(btn => btn.disabled = true);
+            
+            if (chatContainer && !chatContainer.querySelector('.parsing-overlay')) {
+                const overlay = document.createElement('div');
+                overlay.className = 'parsing-overlay';
+                overlay.innerHTML = `
+                    <div class="parsing-overlay-content">
+                        <div class="spinner"></div>
+                        <div style="font-size: 13px; color: #555;">
+                            Идёт парсинг...<br>
+                            <small>Обучение доступно после завершения</small>
+                        </div>
+                    </div>
+                `;
+                chatContainer.style.position = 'relative';
+                chatContainer.appendChild(overlay);
+            }
+        } else {
+            chatInput.disabled = false;
+            chatInput.placeholder = 'Напр: в тэге <individualInfo> не должно быть ORCID';
+            chatButtons.forEach(btn => btn.disabled = false);
+            
+            const overlay = chatContainer?.querySelector('.parsing-overlay');
+            if (overlay) overlay.remove();
+            
+            if (window._chatLockPoller) {
+                clearInterval(window._chatLockPoller);
+                window._chatLockPoller = null;
+            }
+        }
+    } catch(e) {
+        console.error('Ошибка проверки статуса:', e);
+    }
+}
+
+
+function editXmlInline(aid) {
+    const xmlBlock = document.getElementById(`xml-block-${aid}`);
+    const xmlPage = document.getElementById(`xml-page-${aid}`);
+    const actionsDiv = document.getElementById(`xml-actions-${aid}`);
+    
+    if (!xmlBlock || !xmlPage) return;
+    
+    const currentXml = xmlBlock.innerText;
+    xmlBlock.dataset.originalXml = currentXml;
+    xmlBlock.style.display = 'none';
+    
+    if (actionsDiv) {
+        actionsDiv.innerHTML = `
+            <button class="action-btn cancel" onclick="cancelXmlEdit('${aid}')">Отмена</button>
+            <button class="action-btn save" onclick="saveXmlInline('${aid}')">Сохранить</button>
+        `;
+    }
+    
+    const textarea = document.createElement('textarea');
+    textarea.className = 'xml-edit-area';
+    textarea.id = `xml-edit-area-${aid}`;
+    textarea.value = currentXml;
+    textarea.spellcheck = false;
+    
+    xmlPage.insertBefore(textarea, xmlBlock);
+    
+    textarea.focus();
+    textarea.setSelectionRange(0, 0);
+}
+
+function cancelXmlEdit(aid) {
+    const xmlBlock = document.getElementById(`xml-block-${aid}`);
+    const xmlPage = document.getElementById(`xml-page-${aid}`);
+    const textarea = document.getElementById(`xml-edit-area-${aid}`);
+    const actionsDiv = document.getElementById(`xml-actions-${aid}`);
+    
+    if (textarea) textarea.remove();
+    if (xmlBlock) xmlBlock.style.display = 'block';
+    
+    if (actionsDiv) {
+        actionsDiv.innerHTML = `
+            <button class="action-btn" onclick="editXmlInline('${aid}')" title="Редактировать XML вручную">✏️</button>
+        `;
+    }
+}
+
+async function saveXmlInline(aid) {
+    const textarea = document.getElementById(`xml-edit-area-${aid}`);
+    if (!textarea) return;
+    
+    const newXml = textarea.value.trim();
+    
+    if (!newXml) {
+        alert('XML не может быть пустым');
+        return;
+    }
+    
+    try {
+        const res = await fetch(`/article/edit-xml/${aid}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({xml: newXml})
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            const xmlBlock = document.getElementById(`xml-block-${aid}`);
+            xmlBlock.innerText = newXml;
+            
+            cancelXmlEdit(aid);
+            
+            showNotification(
+                `XML сохранён (${data.length.toLocaleString()} симв.)${data.xml_valid ? '' : ' ⚠ возможны синтаксические ошибки'}`,
+                data.xml_valid ? 'success' : 'warning'
+            );
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch(e) {
+        alert('Ошибка сети: ' + e.message);
+    }
+}
+
+function showNotification(message, type='info') {
+    const notif = document.createElement('div');
+    notif.style.cssText = `
+        position: fixed;
+        top: 60px;
+        right: 20px;
+        z-index: 10000;
+        padding: 12px 20px;
+        border-radius: 4px;
+        background: ${type === 'success' ? '#4caf50' : (type === 'error' ? '#f44336' : '#2196f3')};
+        color: white;
+        font-weight: 500;
+        font-size: 13px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        animation: slideIn 0.3s ease;
+    `;
+    notif.innerText = message;
+    document.body.appendChild(notif);
+    setTimeout(() => {
+        notif.style.transition = 'opacity 0.3s';
+        notif.style.opacity = '0';
+        setTimeout(() => notif.remove(), 300);
+    }, 3000);
+}
+
+function toggleMiddleColumn(aid) {
+    const middleCol = document.getElementById(`middle-col-${aid}`);
+    const eyeBtn = document.getElementById(`eye-btn-${aid}`);
+    
+    if (!middleCol) return;
+    
+    const isHidden = middleCol.classList.toggle('col-hidden');
+    
+    if (isHidden) {
+        eyeBtn.classList.add('active');
+        eyeBtn.title = 'Показать колонку';
+    } else {
+        eyeBtn.classList.remove('active');
+        eyeBtn.title = 'Скрыть колонку';
+    }
+}
+async function downloadAllXml() {
+    try {
+        const res = await fetch('/parse/all-results');
+        
+        if (res.status === 404) {
+            alert('Нет готовых результатов.\nСначала запустите парсинг и дождитесь его завершения.');
+            return;
+        }
+        
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+        
+        const data = await res.json();
+        const combinedXml = data.combined_xml;
+        
+        if (!combinedXml || combinedXml.trim() === '') {
+            alert('XML пуст. Возможно, статьи ещё обрабатываются.');
+            return;
+        }
+        
+        const fullXml = `<?xml version="1.0" encoding="UTF-8"?>\n<journal>\n${combinedXml}</journal>`;
+        
+        let filename = 'articles.xml';
+        if (currentFile && currentFile.name) {
+            const baseName = currentFile.name.replace(/\.docx$/i, '');
+            filename = `${baseName}.xml`;
+        }
+        
+        const blob = new Blob([fullXml], { type: 'application/xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        const articleCount = (combinedXml.match(/<!-- Article:/g) || []).length;
+        showNotification(`Скачано ${articleCount} статей в ${filename}`, 'success');
+        
+    } catch(e) {
+        alert('Ошибка загрузки: ' + e.message);
+    }
+}
+
+</script>
+
+<div id="collection-panel" style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 9999; background: #fff; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); padding: 16px; width: 380px; border: 2px solid #4caf50;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <b style="color: #2e7d32;">Сбор примеров</b>
+        <button onclick="cancelCollection()" style="background: none; border: none; cursor: pointer; font-size: 20px; color: #888;">&times;</button>
+    </div>
+    <p style="font-size: 12px; color: #555; margin: 0 0 10px 0; line-height: 1.4;">
+        <b>1.</b> Выделите мышкой нужный блок (уникальный разделитель)<br>
+        <b>2.</b> Нажмите кнопку ниже
+    </p>
+    <div style="background: #f5f5f5; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
+        <b>Собрано примеров:</b> <span id="panel-example-count">0</span> / 3
+    </div>
+    <button class="toolbar-btn btn-start" onclick="addCurrentSelection()" style="width: 100%; justify-content: center; font-weight: 600;">
+        Добавить выделенный текст
+    </button>
+    <button class="toolbar-btn" onclick="finishCollection()" style="width: 100%; justify-content: center; margin-top: 8px;">
+        Готово, применить примеры
+    </button>
+</div>
+
+</body>
+</html>
