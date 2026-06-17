@@ -46,3 +46,5 @@
 В качестве proxy api рекомендуется:
 
 https://github.com/ForgetMeAI/FreeDeepseekAPI
+
+#989I34FI9Kl;ff4j908l;k-904f
